@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 
 import { useWizardState } from '~/composables/useWizardState'
 import {
@@ -86,6 +86,12 @@ const {
   resetDraft,
   setCompletedSteps,
 } = useWizardState()
+
+const hasMounted = ref(false)
+
+onMounted(() => {
+  hasMounted.value = true
+})
 
 const isFormStep = (stepId: WizardStepId): stepId is FormWizardStepId =>
   formStepOrder.includes(stepId as FormWizardStepId)
@@ -222,6 +228,8 @@ const highestUnlockedStepIndex = computed(() => {
 const progressValue = computed(
   () => ((getVisibleStepIndex(currentVisibleStep.value) + 1) / visibleStepOrder.length) * 100,
 )
+
+const isWizardUiReady = computed(() => hasMounted.value && hasHydrated.value)
 
 const lastSavedLabel = computed(() => {
   if (!draft.value.lastUpdatedAt) {
@@ -390,76 +398,108 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
           <p :class="$style.eyebrow">Nuxt 4 + Vue 3 + TypeScript</p>
           <h1 :class="$style.title">Onboarding wizard data flow</h1>
           <p :class="$style.description">
-            Базовый flow теперь включает Review со сводкой данных и экран Complete после
-            подтверждения.
+            {{
+              isWizardUiReady
+                ? 'Базовый flow теперь включает Review со сводкой данных, экран Complete и корректное восстановление прогресса после перезагрузки.'
+                : 'Подготавливаем интерфейс wizard и восстанавливаем локальный черновик после перезагрузки.'
+            }}
           </p>
         </div>
 
-        <p :class="$style.statusBadge">{{ lastSavedLabel }}</p>
+        <p :class="$style.statusBadge">
+          {{ isWizardUiReady ? lastSavedLabel : 'Подготовка wizard…' }}
+        </p>
       </header>
 
-      <div :class="$style.layout">
+      <div :class="[$style.layout, !isWizardUiReady && $style.loadingLayout]">
         <aside :class="$style.sidebar">
           <div :class="$style.progressCard">
-            <div :class="$style.progressLabelRow">
-              <span>Текущий этап</span>
-              <span
-                >{{ getVisibleStepIndex(currentVisibleStep) + 1 }}/{{
-                  visibleStepOrder.length
-                }}</span
-              >
-            </div>
-
-            <div :class="$style.progressTrack">
-              <span
-                :class="$style.progressBar"
-                :style="{ width: `${progressValue}%` }"
-              ></span>
-            </div>
-
-            <ul :class="$style.stepList">
-              <li
-                v-for="step in stepMetaList"
-                :key="step.id"
-              >
-                <button
-                  type="button"
-                  :class="[
-                    $style.stepButton,
-                    step.id === currentVisibleStep && $style.stepButtonCurrent,
-                    isStepComplete(step.id) && $style.stepButtonComplete,
-                  ]"
-                  :disabled="!isStepUnlocked(step.id)"
-                  @click="goToStep(step.id)"
+            <template v-if="isWizardUiReady">
+              <div :class="$style.progressLabelRow">
+                <span>Текущий этап</span>
+                <span
+                  >{{ getVisibleStepIndex(currentVisibleStep) + 1 }}/{{
+                    visibleStepOrder.length
+                  }}</span
                 >
-                  <span :class="$style.stepIndex">{{ getVisibleStepIndex(step.id) + 1 }}</span>
-                  <span :class="$style.stepContent">
-                    <span :class="$style.stepName">{{ step.title }}</span>
-                    <span :class="$style.stepDescription">{{ step.description }}</span>
-                  </span>
-                </button>
-              </li>
-            </ul>
+              </div>
+
+              <div :class="$style.progressTrack">
+                <span
+                  :class="$style.progressBar"
+                  :style="{ width: `${progressValue}%` }"
+                ></span>
+              </div>
+
+              <ul :class="$style.stepList">
+                <li
+                  v-for="step in stepMetaList"
+                  :key="step.id"
+                >
+                  <button
+                    type="button"
+                    :class="[
+                      $style.stepButton,
+                      step.id === currentVisibleStep && $style.stepButtonCurrent,
+                      isStepComplete(step.id) && $style.stepButtonComplete,
+                    ]"
+                    :disabled="!isStepUnlocked(step.id)"
+                    @click="goToStep(step.id)"
+                  >
+                    <span :class="$style.stepIndex">{{ getVisibleStepIndex(step.id) + 1 }}</span>
+                    <span :class="$style.stepContent">
+                      <span :class="$style.stepName">{{ step.title }}</span>
+                      <span :class="$style.stepDescription">{{ step.description }}</span>
+                    </span>
+                  </button>
+                </li>
+              </ul>
+            </template>
+
+            <div
+              v-else
+              :class="$style.loadingStack"
+            >
+              <div :class="$style.loadingBlock"></div>
+              <div :class="[$style.loadingBlock, $style.loadingBlockWide]"></div>
+              <div
+                v-for="item in 5"
+                :key="item"
+                :class="[$style.loadingBlock, $style.loadingBlockTall]"
+              ></div>
+            </div>
           </div>
 
           <div :class="$style.noteCard">
             <p :class="$style.noteTitle">Что уже работает</p>
             <ul :class="$style.noteList">
               <li>черновик автоматически сохраняется в `localStorage`</li>
-              <li>review собирает сводку всех введённых данных</li>
-              <li>после подтверждения flow заканчивается экраном complete</li>
+              <li>после reload восстанавливаются шаг, прогресс и доступные переходы</li>
+              <li>review собирает сводку всех введённых данных перед complete</li>
             </ul>
           </div>
         </aside>
 
         <section :class="$style.panel">
           <div :class="$style.panelHeader">
-            <p :class="$style.panelEyebrow">{{ currentMeta.eyebrow }}</p>
-            <h2 :class="$style.panelTitle">{{ currentMeta.title }}</h2>
-            <p :class="$style.panelDescription">{{ currentMeta.description }}</p>
+            <template v-if="isWizardUiReady">
+              <p :class="$style.panelEyebrow">{{ currentMeta.eyebrow }}</p>
+              <h2 :class="$style.panelTitle">{{ currentMeta.title }}</h2>
+              <p :class="$style.panelDescription">{{ currentMeta.description }}</p>
+            </template>
+
+            <div
+              v-else
+              :class="$style.loadingPanel"
+            >
+              <div :class="[$style.loadingBlock, $style.loadingBlockShort]"></div>
+              <div :class="[$style.loadingBlock, $style.loadingBlockTitle]"></div>
+              <div :class="[$style.loadingBlock, $style.loadingBlockWide]"></div>
+            </div>
           </div>
 
           <form
+            v-if="isWizardUiReady"
             :class="$style.form"
             @submit.prevent="handlePrimaryAction"
           >
@@ -746,6 +786,19 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
               </button>
             </div>
           </form>
+
+          <div
+            v-else
+            :class="$style.loadingPanel"
+          >
+            <div :class="[$style.loadingBlock, $style.loadingBlockWide]"></div>
+            <div :class="[$style.loadingBlock, $style.loadingBlockWide]"></div>
+            <div :class="[$style.loadingBlock, $style.loadingBlockTall]"></div>
+            <div :class="$style.loadingActions">
+              <div :class="[$style.loadingBlock, $style.loadingButton]"></div>
+              <div :class="[$style.loadingBlock, $style.loadingButton]"></div>
+            </div>
+          </div>
         </section>
       </div>
     </section>

@@ -63,6 +63,10 @@
   grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
 }
 
+.loadingLayout {
+  min-height: 620px;
+}
+
 .sidebar {
   display: grid;
   gap: 18px;
@@ -81,6 +85,56 @@
 .progressCard,
 .noteCard {
   padding: 22px;
+}
+
+.loadingStack,
+.loadingPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.loadingBlock {
+  height: 14px;
+  background: linear-gradient(
+    90deg,
+    rgb(148 163 184 / 0.12),
+    rgb(226 232 240 / 0.5),
+    rgb(148 163 184 / 0.12)
+  );
+  background-size: 220% 100%;
+  border-radius: 999px;
+  animation: loading-shimmer 1.6s linear infinite;
+}
+
+.loadingBlockShort {
+  width: 92px;
+}
+
+.loadingBlockTitle {
+  width: min(360px, 78%);
+  height: 32px;
+  border-radius: 16px;
+}
+
+.loadingBlockWide {
+  width: 100%;
+}
+
+.loadingBlockTall {
+  height: 68px;
+  border-radius: 24px;
+}
+
+.loadingActions {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.loadingButton {
+  width: 156px;
+  height: 54px;
 }
 
 .progressLabelRow {
@@ -550,7 +604,8 @@
   }
 
   .choiceHeader,
-  .actions {
+  .actions,
+  .loadingActions {
     flex-direction: column;
     align-items: stretch;
   }
@@ -562,5 +617,19 @@
 
   .actionButton {
     width: 100%;
+  }
+
+  .loadingButton {
+    width: 100%;
+  }
+}
+
+@keyframes loading-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -20% 0;
   }
 }
