@@ -5,15 +5,15 @@ import {
   createInitialWizardDraft,
   getNextWizardStep,
   getPreviousWizardStep,
-} from '../lib/wizard'
-import { clearWizardDraft, loadWizardDraft, saveWizardDraft } from '../lib/wizard-storage'
+} from '~~/lib/wizard'
+import { clearWizardDraft, loadWizardDraft, saveWizardDraft } from '~~/lib/wizard-storage'
 import type {
   WizardAccountData,
   WizardDraft,
   WizardPreferencesData,
   WizardProfileData,
   WizardStepId,
-} from '../types/wizard'
+} from '~~/types/wizard'
 
 export const useWizardState = () => {
   const draft = useState<WizardDraft>('wizard-draft', createInitialWizardDraft)
@@ -22,17 +22,19 @@ export const useWizardState = () => {
   const skipNextPersist = useState<boolean>('wizard-draft-skip-next-persist', () => false)
 
   const persistDraft = () => {
-    saveWizardDraft({
-      ...draft.value,
-      lastUpdatedAt: new Date().toISOString(),
-    })
+    draft.value.lastUpdatedAt = new Date().toISOString()
+    saveWizardDraft(draft.value)
   }
 
   if (import.meta.client && !hasPersistenceSync.value) {
     hasPersistenceSync.value = true
 
     watch(
-      draft,
+      () => ({
+        currentStep: draft.value.currentStep,
+        completedSteps: draft.value.completedSteps,
+        data: draft.value.data,
+      }),
       () => {
         if (!hasHydrated.value) {
           return
@@ -100,6 +102,10 @@ export const useWizardState = () => {
     draft.value.completedSteps.push(stepId)
   }
 
+  const setCompletedSteps = (stepIds: WizardStepId[]) => {
+    draft.value.completedSteps = [...stepIds]
+  }
+
   const resetDraft = () => {
     skipNextPersist.value = true
     draft.value = createInitialWizardDraft()
@@ -143,6 +149,7 @@ export const useWizardState = () => {
     goToNextStep,
     goToPreviousStep,
     markStepCompleted,
+    setCompletedSteps,
     resetDraft,
     updateAccount,
     updateProfile,

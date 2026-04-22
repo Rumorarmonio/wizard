@@ -8,7 +8,7 @@ import type {
   WizardProfileData,
   WizardStepId,
   WizardWorkspaceMode,
-} from '../types/wizard'
+} from '~~/types/wizard'
 
 export const WIZARD_STORAGE_VERSION = 1
 

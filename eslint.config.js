@@ -30,6 +30,12 @@ const importResolverSettings = {
   'import/resolver': {
     typescript: {
       alwaysTryTypes: true,
+      project: [
+        './.nuxt/tsconfig.app.json',
+        './.nuxt/tsconfig.shared.json',
+        './.nuxt/tsconfig.server.json',
+        './.nuxt/tsconfig.node.json',
+      ],
     },
   },
 }

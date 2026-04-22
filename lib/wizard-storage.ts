@@ -6,13 +6,13 @@ import {
   createInitialWizardDraft,
   isWizardStepId,
   sanitizeCompletedSteps,
-} from './wizard'
+} from '~~/lib/wizard'
 import type {
   WizardDraft,
   WizardInterest,
   WizardNotificationChannel,
   WizardWorkspaceMode,
-} from '../types/wizard'
+} from '~~/types/wizard'
 
 const WIZARD_STORAGE_KEY = 'wizard:onboarding:draft'
 
