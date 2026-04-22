@@ -1,44 +1,25 @@
+# Nuxt dev/build outputs
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node dependencies
+node_modules
+
 # Logs
 logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-# Dependencies
-node_modules
+# Misc
+.codex
+.DS_Store
+.fleet
+.idea
 
-# Build output
-dist
-dist-ssr
-coverage
-build
-.svelte-kit
-
-# Environment files
+# Local env files
 .env
 .env.*
 !.env.example
-*.local
-
-# Tooling
-.codex
-.cache
-.temp
-.tmp
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# OS files
-.DS_Store
-Thumbs.db

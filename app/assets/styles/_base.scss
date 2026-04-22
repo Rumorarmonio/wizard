@@ -1,0 +1,35 @@
+html {
+  box-sizing: border-box;
+  font-family: var(--font-sans);
+  background:
+    radial-gradient(circle at top, rgb(251 191 36 / 0.2), transparent 28%),
+    linear-gradient(180deg, #fcfaf5 0%, var(--color-background) 100%);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: inherit;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  color: var(--color-text);
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
