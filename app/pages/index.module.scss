@@ -251,6 +251,68 @@
   gap: 10px;
 }
 
+.reviewStack {
+  display: grid;
+  gap: 16px;
+}
+
+.reviewCard,
+.completeCard {
+  padding: 20px;
+  background: rgb(255 255 255 / 0.74);
+  border: 1px solid rgb(148 163 184 / 0.18);
+  border-radius: 22px;
+}
+
+.reviewTitle {
+  margin: 0 0 14px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.reviewGrid {
+  display: grid;
+  gap: 10px 14px;
+  grid-template-columns: minmax(120px, 180px) minmax(0, 1fr);
+  margin: 0;
+}
+
+.reviewLabel {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.reviewValue {
+  margin: 0;
+  line-height: 1.5;
+  color: var(--color-text);
+}
+
+.completeEyebrow {
+  margin: 0 0 10px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #166534;
+}
+
+.completeTitle {
+  margin: 0 0 10px;
+  font-size: clamp(1.6rem, 2vw, 2.2rem);
+  line-height: 1.05;
+  color: var(--color-text);
+}
+
+.completeText {
+  max-width: 52ch;
+  margin: 0;
+  line-height: 1.65;
+  color: var(--color-text-muted);
+}
+
 .fieldLabel {
   font-size: 0.95rem;
   font-weight: 700;
@@ -475,7 +537,8 @@
   }
 
   .layout,
-  .grid {
+  .grid,
+  .reviewGrid {
     grid-template-columns: 1fr;
   }
 

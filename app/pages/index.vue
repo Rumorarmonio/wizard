@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 
-import { useWizardState } from '~~/composables/useWizardState'
+import { useWizardState } from '~/composables/useWizardState'
 import {
   WIZARD_INTEREST_OPTIONS,
   WIZARD_NOTIFICATION_OPTIONS,
@@ -19,10 +19,11 @@ import type {
   WizardWorkspaceMode,
 } from '~~/types/wizard'
 
-type EditableWizardStepId = Extract<WizardStepId, 'account' | 'profile' | 'preferences'>
+type FormWizardStepId = Extract<WizardStepId, 'account' | 'profile' | 'preferences'>
+type VisibleWizardStepId = WizardStepId
 
 interface WizardStepMeta {
-  id: EditableWizardStepId
+  id: VisibleWizardStepId
   title: string
   eyebrow: string
   description: string
@@ -45,26 +46,35 @@ const stepMetaList: WizardStepMeta[] = [
     id: 'profile',
     title: 'Заполните профиль команды',
     eyebrow: 'Step 2',
-    description: 'Эти данные пригодятся для персонализации интерфейса и summary на Review.',
+    description: 'Добавим базовые данные для персонализации и review summary.',
   },
   {
     id: 'preferences',
     title: 'Настройте интересы и формат работы',
     eyebrow: 'Step 3',
-    description: 'Зафиксируем направления интереса, каналы уведомлений и preferred workspace mode.',
+    description: 'Зафиксируем интересы, уведомления и preferred workspace mode.',
+  },
+  {
+    id: 'review',
+    title: 'Проверьте введённые данные',
+    eyebrow: 'Step 4',
+    description: 'Перед завершением сверим все введённые поля в одной сводке.',
+  },
+  {
+    id: 'complete',
+    title: 'Onboarding completed',
+    eyebrow: 'Step 5',
+    description: 'Базовый поток завершён. Можно сбросить черновик и начать заново.',
   },
 ]
 
-const editableStepOrder = stepMetaList.map((step) => step.id)
-const stepTouchState = reactive<Record<EditableWizardStepId, boolean>>({
+const formStepOrder: FormWizardStepId[] = ['account', 'profile', 'preferences']
+const visibleStepOrder = stepMetaList.map((step) => step.id)
+const stepTouchState = reactive<Record<FormWizardStepId, boolean>>({
   account: false,
   profile: false,
   preferences: false,
 })
-const hasAlignedStepAfterHydration = reactive({ value: false })
-
-const stageCompletionMessage =
-  'Данные базовых шагов сохранены. Review и Complete будут добавлены на следующем этапе.'
 
 const {
   draft,
@@ -72,15 +82,16 @@ const {
   currentStep,
   previousStep,
   setCurrentStep,
-  goToNextStep,
   goToPreviousStep,
+  resetDraft,
   setCompletedSteps,
 } = useWizardState()
 
-const isEditableStep = (stepId: WizardStepId): stepId is EditableWizardStepId =>
-  editableStepOrder.includes(stepId as EditableWizardStepId)
+const isFormStep = (stepId: WizardStepId): stepId is FormWizardStepId =>
+  formStepOrder.includes(stepId as FormWizardStepId)
 
-const getStepIndex = (stepId: EditableWizardStepId): number => editableStepOrder.indexOf(stepId)
+const getVisibleStepIndex = (stepId: VisibleWizardStepId): number =>
+  visibleStepOrder.indexOf(stepId)
 
 const validations = computed<WizardValidationMap>(() => ({
   account: validateAccountStep(draft.value.data.account),
@@ -88,10 +99,10 @@ const validations = computed<WizardValidationMap>(() => ({
   preferences: validatePreferencesStep(draft.value.data.preferences),
 }))
 
-const getContiguousCompletedSteps = (): EditableWizardStepId[] => {
-  const completedSteps: EditableWizardStepId[] = []
+const getContiguousFormSteps = (): FormWizardStepId[] => {
+  const completedSteps: FormWizardStepId[] = []
 
-  for (const stepId of editableStepOrder) {
+  for (const stepId of formStepOrder) {
     if (!validations.value[stepId].isValid) {
       break
     }
@@ -102,42 +113,46 @@ const getContiguousCompletedSteps = (): EditableWizardStepId[] => {
   return completedSteps
 }
 
-const getHighestUnlockedStepIndex = (): number =>
-  Math.min(getContiguousCompletedSteps().length, editableStepOrder.length - 1)
+const canAccessReview = computed(() => getContiguousFormSteps().length === formStepOrder.length)
+const canAccessComplete = computed(() => draft.value.completedSteps.includes('review'))
 
-const getCurrentEditableStepIndex = (): number => {
-  if (!isEditableStep(currentStep.value)) {
-    return 0
+const getAllowedCompletedSteps = (): VisibleWizardStepId[] => {
+  const baseSteps = getContiguousFormSteps()
+  const completedSteps: VisibleWizardStepId[] = [...baseSteps]
+
+  if (canAccessComplete.value) {
+    completedSteps.push('review', 'complete')
   }
 
-  return getStepIndex(currentStep.value)
+  return completedSteps
 }
 
-const areStepListsEqual = (left: EditableWizardStepId[], right: EditableWizardStepId[]): boolean =>
-  left.length === right.length && left.every((stepId, index) => stepId === right[index])
+const syncProgressState = () => {
+  const nextCompletedSteps = getAllowedCompletedSteps()
+  const currentCompletedSteps = draft.value.completedSteps.filter(
+    (stepId): stepId is VisibleWizardStepId => visibleStepOrder.includes(stepId),
+  )
 
-const clampStepToEditableRange = () => {
-  const fallbackStepId = editableStepOrder[getHighestUnlockedStepIndex()]
-
-  if (!isEditableStep(currentStep.value)) {
-    setCurrentStep(fallbackStepId)
-    return
-  }
-
-  if (getStepIndex(currentStep.value) > getHighestUnlockedStepIndex()) {
-    setCurrentStep(fallbackStepId)
-  }
-}
-
-const syncWizardProgress = () => {
-  const nextCompletedSteps = getContiguousCompletedSteps()
-  const currentCompletedSteps = draft.value.completedSteps.filter(isEditableStep)
-
-  if (!areStepListsEqual(currentCompletedSteps, nextCompletedSteps)) {
+  if (
+    nextCompletedSteps.length !== currentCompletedSteps.length ||
+    nextCompletedSteps.some((stepId, index) => stepId !== currentCompletedSteps[index])
+  ) {
     setCompletedSteps(nextCompletedSteps)
   }
 
-  clampStepToEditableRange()
+  if (currentStep.value === 'complete' && !canAccessComplete.value) {
+    setCurrentStep('review')
+    return
+  }
+
+  if (currentStep.value === 'review' && !canAccessReview.value) {
+    setCurrentStep(formStepOrder[getContiguousFormSteps().length] ?? 'account')
+    return
+  }
+
+  if (!visibleStepOrder.includes(currentStep.value)) {
+    setCurrentStep(formStepOrder[0])
+  }
 }
 
 watch(
@@ -147,18 +162,10 @@ watch(
       return
     }
 
-    syncWizardProgress()
+    syncProgressState()
   },
   { deep: true },
 )
-
-watch(currentStep, () => {
-  if (!hasHydrated.value) {
-    return
-  }
-
-  clampStepToEditableRange()
-})
 
 watch(
   hasHydrated,
@@ -167,52 +174,55 @@ watch(
       return
     }
 
-    syncWizardProgress()
-
-    if (!hasAlignedStepAfterHydration.value) {
-      hasAlignedStepAfterHydration.value = true
-
-      const fallbackStepId = editableStepOrder[getHighestUnlockedStepIndex()]
-
-      if (getCurrentEditableStepIndex() < getStepIndex(fallbackStepId)) {
-        setCurrentStep(fallbackStepId)
-      }
-    }
+    syncProgressState()
   },
   { immediate: true },
 )
 
-const currentEditableStep = computed<EditableWizardStepId>(() =>
-  isEditableStep(currentStep.value) ? currentStep.value : editableStepOrder[0],
+const currentVisibleStep = computed<VisibleWizardStepId>(() =>
+  visibleStepOrder.includes(currentStep.value) ? currentStep.value : 'account',
 )
 
 const currentMeta = computed(
-  () => stepMetaList.find((step) => step.id === currentEditableStep.value) ?? stepMetaList[0],
+  () => stepMetaList.find((step) => step.id === currentVisibleStep.value) ?? stepMetaList[0],
 )
 
-const stepErrors = computed<Record<EditableWizardStepId, Record<string, string | undefined>>>(
-  () => ({
-    account: validations.value.account.errors,
-    profile: validations.value.profile.errors,
-    preferences: validations.value.preferences.errors,
-  }),
+const currentFormStep = computed<FormWizardStepId | null>(() =>
+  isFormStep(currentVisibleStep.value) ? currentVisibleStep.value : null,
 )
-const currentErrorList = computed<string[]>(() =>
-  Object.values(stepErrors.value[currentEditableStep.value]).filter(
+
+const currentErrorList = computed<string[]>(() => {
+  if (!currentFormStep.value || !stepTouchState[currentFormStep.value]) {
+    return []
+  }
+
+  return Object.values(validations.value[currentFormStep.value].errors).filter(
     (message): message is string => typeof message === 'string' && message.length > 0,
+  )
+})
+
+const completedSteps = computed<VisibleWizardStepId[]>(() =>
+  draft.value.completedSteps.filter((stepId): stepId is VisibleWizardStepId =>
+    visibleStepOrder.includes(stepId),
   ),
 )
-const completedEditableSteps = computed<EditableWizardStepId[]>(() => {
-  const completedFromDraft = draft.value.completedSteps.filter(isEditableStep)
-  const completedFromCurrentStep = editableStepOrder.slice(0, getCurrentEditableStepIndex())
 
-  return completedFromDraft.length > completedFromCurrentStep.length
-    ? completedFromDraft
-    : completedFromCurrentStep
+const highestUnlockedStepIndex = computed(() => {
+  if (canAccessComplete.value) {
+    return getVisibleStepIndex('complete')
+  }
+
+  if (canAccessReview.value) {
+    return getVisibleStepIndex('review')
+  }
+
+  return getContiguousFormSteps().length
 })
+
 const progressValue = computed(
-  () => ((getStepIndex(currentEditableStep.value) + 1) / editableStepOrder.length) * 100,
+  () => ((getVisibleStepIndex(currentVisibleStep.value) + 1) / visibleStepOrder.length) * 100,
 )
+
 const lastSavedLabel = computed(() => {
   if (!draft.value.lastUpdatedAt) {
     return 'Автосохранение включено'
@@ -223,33 +233,81 @@ const lastSavedLabel = computed(() => {
     minute: '2-digit',
   })}`
 })
-const isLastEditableStep = computed(
-  () => currentEditableStep.value === editableStepOrder[editableStepOrder.length - 1],
-)
-const primaryActionLabel = computed(() => (isLastEditableStep.value ? 'Сохранить этап' : 'Next'))
-const preferencesSaved = computed(
-  () => currentEditableStep.value === 'preferences' && validations.value.preferences.isValid,
-)
 
-const highestAccessibleStepIndex = computed(() =>
-  Math.max(getHighestUnlockedStepIndex(), getCurrentEditableStepIndex()),
-)
+const primaryActionLabel = computed(() => {
+  switch (currentVisibleStep.value) {
+    case 'preferences':
+      return 'Перейти к Review'
+    case 'review':
+      return 'Complete onboarding'
+    case 'complete':
+      return 'Start over'
+    default:
+      return 'Next'
+  }
+})
 
-const isStepUnlocked = (stepId: EditableWizardStepId): boolean =>
-  getStepIndex(stepId) <= highestAccessibleStepIndex.value
+const reviewSummary = computed(() => [
+  {
+    title: 'Account',
+    rows: [
+      { label: 'Email', value: draft.value.data.account.email || 'Не заполнено' },
+      {
+        label: 'Password',
+        value: draft.value.data.account.password
+          ? '•'.repeat(draft.value.data.account.password.length)
+          : 'Не заполнено',
+      },
+    ],
+  },
+  {
+    title: 'Profile',
+    rows: [
+      { label: 'First name', value: draft.value.data.profile.firstName || 'Не заполнено' },
+      { label: 'Last name', value: draft.value.data.profile.lastName || 'Не заполнено' },
+      { label: 'Role', value: draft.value.data.profile.jobTitle || 'Не заполнено' },
+      { label: 'Location', value: draft.value.data.profile.location || 'Не заполнено' },
+    ],
+  },
+  {
+    title: 'Preferences',
+    rows: [
+      {
+        label: 'Interests',
+        value: draft.value.data.preferences.interests.length
+          ? draft.value.data.preferences.interests.join(', ')
+          : 'Не заполнено',
+      },
+      {
+        label: 'Notifications',
+        value: draft.value.data.preferences.notifications.length
+          ? draft.value.data.preferences.notifications.join(', ')
+          : 'Не заполнено',
+      },
+      { label: 'Workspace mode', value: draft.value.data.preferences.workspaceMode },
+    ],
+  },
+])
 
-const isStepComplete = (stepId: EditableWizardStepId): boolean =>
-  completedEditableSteps.value.includes(stepId)
+const isStepUnlocked = (stepId: VisibleWizardStepId): boolean =>
+  getVisibleStepIndex(stepId) <= highestUnlockedStepIndex.value
 
-const getFieldError = <T extends EditableWizardStepId>(stepId: T, fieldName: string): string => {
+const isStepComplete = (stepId: VisibleWizardStepId): boolean =>
+  completedSteps.value.includes(stepId)
+
+const getFieldError = (stepId: FormWizardStepId, fieldName: string): string => {
   if (!stepTouchState[stepId]) {
     return ''
   }
 
-  return stepErrors.value[stepId][fieldName] ?? ''
+  return (
+    validations.value[stepId].errors[
+      fieldName as keyof (typeof validations.value)[typeof stepId]['errors']
+    ] ?? ''
+  )
 }
 
-const goToStep = (stepId: EditableWizardStepId) => {
+const goToStep = (stepId: VisibleWizardStepId) => {
   if (!isStepUnlocked(stepId)) {
     return
   }
@@ -258,7 +316,7 @@ const goToStep = (stepId: EditableWizardStepId) => {
 }
 
 const handleBack = () => {
-  if (!previousStep.value || !isEditableStep(previousStep.value)) {
+  if (!previousStep.value) {
     return
   }
 
@@ -266,18 +324,40 @@ const handleBack = () => {
 }
 
 const handlePrimaryAction = () => {
-  const stepId = currentEditableStep.value
+  if (currentVisibleStep.value === 'complete') {
+    resetDraft()
+    return
+  }
 
+  if (currentVisibleStep.value === 'review') {
+    setCompletedSteps([...getContiguousFormSteps(), 'review', 'complete'])
+    setCurrentStep('complete')
+    return
+  }
+
+  if (!currentFormStep.value) {
+    return
+  }
+
+  const stepId = currentFormStep.value
   stepTouchState[stepId] = true
 
   if (!validations.value[stepId].isValid) {
     return
   }
 
-  setCompletedSteps(getContiguousCompletedSteps())
+  if (stepId === 'preferences') {
+    setCompletedSteps(getContiguousFormSteps())
+    setCurrentStep('review')
+    return
+  }
 
-  if (!isLastEditableStep.value) {
-    goToNextStep()
+  const nextIndex = formStepOrder.indexOf(stepId) + 1
+  const nextStep = formStepOrder[nextIndex]
+
+  if (nextStep) {
+    setCompletedSteps(getContiguousFormSteps())
+    setCurrentStep(nextStep)
   }
 }
 
@@ -310,8 +390,8 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
           <p :class="$style.eyebrow">Nuxt 4 + Vue 3 + TypeScript</p>
           <h1 :class="$style.title">Onboarding wizard data flow</h1>
           <p :class="$style.description">
-            Реализованы базовые шаги Account, Profile и Preferences с локальным черновиком и
-            пошаговой валидацией.
+            Базовый flow теперь включает Review со сводкой данных и экран Complete после
+            подтверждения.
           </p>
         </div>
 
@@ -324,7 +404,9 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
             <div :class="$style.progressLabelRow">
               <span>Текущий этап</span>
               <span
-                >{{ getStepIndex(currentEditableStep) + 1 }}/{{ editableStepOrder.length }}</span
+                >{{ getVisibleStepIndex(currentVisibleStep) + 1 }}/{{
+                  visibleStepOrder.length
+                }}</span
               >
             </div>
 
@@ -344,13 +426,13 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
                   type="button"
                   :class="[
                     $style.stepButton,
-                    step.id === currentEditableStep && $style.stepButtonCurrent,
+                    step.id === currentVisibleStep && $style.stepButtonCurrent,
                     isStepComplete(step.id) && $style.stepButtonComplete,
                   ]"
                   :disabled="!isStepUnlocked(step.id)"
                   @click="goToStep(step.id)"
                 >
-                  <span :class="$style.stepIndex">{{ getStepIndex(step.id) + 1 }}</span>
+                  <span :class="$style.stepIndex">{{ getVisibleStepIndex(step.id) + 1 }}</span>
                   <span :class="$style.stepContent">
                     <span :class="$style.stepName">{{ step.title }}</span>
                     <span :class="$style.stepDescription">{{ step.description }}</span>
@@ -364,8 +446,8 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
             <p :class="$style.noteTitle">Что уже работает</p>
             <ul :class="$style.noteList">
               <li>черновик автоматически сохраняется в `localStorage`</li>
-              <li>переход вперёд блокируется до валидного текущего шага</li>
-              <li>назад можно вернуться без потери данных</li>
+              <li>review собирает сводку всех введённых данных</li>
+              <li>после подтверждения flow заканчивается экраном complete</li>
             </ul>
           </div>
         </aside>
@@ -381,7 +463,7 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
             :class="$style.form"
             @submit.prevent="handlePrimaryAction"
           >
-            <template v-if="currentEditableStep === 'account'">
+            <template v-if="currentVisibleStep === 'account'">
               <label :class="$style.field">
                 <span :class="$style.fieldLabel">Email</span>
                 <input
@@ -420,7 +502,7 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
               </label>
             </template>
 
-            <template v-else-if="currentEditableStep === 'profile'">
+            <template v-else-if="currentVisibleStep === 'profile'">
               <div :class="$style.grid">
                 <label :class="$style.field">
                   <span :class="$style.fieldLabel">First name</span>
@@ -506,7 +588,7 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
               </div>
             </template>
 
-            <template v-else>
+            <template v-else-if="currentVisibleStep === 'preferences'">
               <div :class="$style.choiceGroup">
                 <div :class="$style.choiceHeader">
                   <span :class="$style.fieldLabel">Interests</span>
@@ -595,8 +677,44 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
               </div>
             </template>
 
+            <template v-else-if="currentVisibleStep === 'review'">
+              <div :class="$style.reviewStack">
+                <section
+                  v-for="section in reviewSummary"
+                  :key="section.title"
+                  :class="$style.reviewCard"
+                >
+                  <h3 :class="$style.reviewTitle">{{ section.title }}</h3>
+                  <dl :class="$style.reviewGrid">
+                    <template
+                      v-for="row in section.rows"
+                      :key="row.label"
+                    >
+                      <dt :class="$style.reviewLabel">{{ row.label }}</dt>
+                      <dd :class="$style.reviewValue">{{ row.value }}</dd>
+                    </template>
+                  </dl>
+                </section>
+              </div>
+
+              <p :class="$style.infoBox">
+                Если всё корректно, подтвердите данные и перейдите к экрану завершения.
+              </p>
+            </template>
+
+            <template v-else>
+              <div :class="$style.completeCard">
+                <p :class="$style.completeEyebrow">Flow complete</p>
+                <h3 :class="$style.completeTitle">Черновик wizard завершён</h3>
+                <p :class="$style.completeText">
+                  Базовый onboarding flow доведён до конца. Можно вернуться к review или сбросить
+                  состояние и начать сценарий заново.
+                </p>
+              </div>
+            </template>
+
             <div
-              v-if="stepTouchState[currentEditableStep] && currentErrorList.length"
+              v-if="currentFormStep && currentErrorList.length"
               :class="$style.errorBox"
             >
               <p :class="$style.errorTitle">Текущий шаг нужно завершить без ошибок:</p>
@@ -610,18 +728,11 @@ const setWorkspaceMode = (mode: WizardWorkspaceMode) => {
               </ul>
             </div>
 
-            <p
-              v-if="preferencesSaved"
-              :class="$style.infoBox"
-            >
-              {{ stageCompletionMessage }}
-            </p>
-
             <div :class="$style.actions">
               <button
                 type="button"
                 :class="[$style.actionButton, $style.actionButtonGhost]"
-                :disabled="currentEditableStep === 'account'"
+                :disabled="currentVisibleStep === 'account'"
                 @click="handleBack"
               >
                 Back
