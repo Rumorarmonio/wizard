@@ -1,5 +1,4 @@
 :root {
-  color-scheme: light;
   --color-background: #f4efe6;
   --color-surface: #fffaf2;
   --color-border: rgb(148 163 184 / 0.32);
@@ -7,5 +6,7 @@
   --color-text-muted: #4b5563;
   --color-accent: #9a3412;
   --shadow-focus: 0 0 0 3px rgb(154 52 18 / 0.18);
-  --font-sans: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  --font-sans: 'Segoe UI', tahoma, geneva, verdana, sans-serif;
+
+  color-scheme: light;
 }
