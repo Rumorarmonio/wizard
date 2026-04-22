@@ -121,13 +121,36 @@ const getContiguousFormSteps = (): FormWizardStepId[] => {
 
 const canAccessReview = computed(() => getContiguousFormSteps().length === formStepOrder.length)
 const canAccessComplete = computed(() => draft.value.completedSteps.includes('review'))
+const hasCompletedReview = computed(
+  () => draft.value.completedSteps.includes('review') && canAccessReview.value,
+)
+const hasCompletedComplete = computed(
+  () =>
+    draft.value.completedSteps.includes('complete') &&
+    canAccessComplete.value &&
+    currentStep.value === 'complete',
+)
 
 const getAllowedCompletedSteps = (): VisibleWizardStepId[] => {
   const baseSteps = getContiguousFormSteps()
   const completedSteps: VisibleWizardStepId[] = [...baseSteps]
 
-  if (canAccessComplete.value) {
-    completedSteps.push('review', 'complete')
+  if (hasCompletedReview.value) {
+    completedSteps.push('review')
+  }
+
+  if (hasCompletedComplete.value) {
+    completedSteps.push('complete')
+  }
+
+  return completedSteps
+}
+
+const getPersistedFormCompletedSteps = (): VisibleWizardStepId[] => {
+  const completedSteps: VisibleWizardStepId[] = [...getContiguousFormSteps()]
+
+  if (hasCompletedReview.value) {
+    completedSteps.push('review')
   }
 
   return completedSteps
@@ -355,7 +378,7 @@ const handlePrimaryAction = () => {
   }
 
   if (stepId === 'preferences') {
-    setCompletedSteps(getContiguousFormSteps())
+    setCompletedSteps(getPersistedFormCompletedSteps())
     setCurrentStep('review')
     return
   }
@@ -364,7 +387,7 @@ const handlePrimaryAction = () => {
   const nextStep = formStepOrder[nextIndex]
 
   if (nextStep) {
-    setCompletedSteps(getContiguousFormSteps())
+    setCompletedSteps(getPersistedFormCompletedSteps())
     setCurrentStep(nextStep)
   }
 }
